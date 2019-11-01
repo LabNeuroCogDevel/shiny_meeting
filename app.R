@@ -17,52 +17,15 @@ library(scales)
 library(shinydashboard)
 library(RColorBrewer)
 library(stringr)
-con <- lncd_pgconn()
+source('funcs.R')
+source('plots.R')
 
 ### not used. just hardcode the two we want
-studies <- db_query("select study from study", con)$study
-vtypes <- unique(db_query("select * from visit_summary", con)$vtype)
+studies <- db_query("select study from study")$study
+vtypes <- unique(db_query("select * from visit_summary")$vtype)
 lastweek <- today() - days(7)
 nextweek <- today() + days(7)
 
-bea_res <- function(...) normalizePath(
-  file.path(
-    ifelse(.Platform$OS.type == "windows", 'L:','/Volumes/L'),
-    'bea_res',
-    ...))
-
-get_data <- function(input) {
-  qry <- sprintf("
-                 select * from visit_summary
-                 natural join person
-                 natural join enroll
-                 where study like '%s'
-                 and vtimestamp >= '%s'
-                 and vtimestamp <= '%s'
-                 and visitno >= %s
-                 and visitno <= %s
-                 and etype like 'LunaID'",
-                 input$study, input$daterange[1], input$daterange[2], input$study_yr[1], input$study_yr[2])
-  d <- db_query(qry, con) %>%
-    mutate(vdate=date(vtimestamp),
-           #vtime=hm(format(vtimestamp, "%H:%M")),
-           vtime=as.POSIXct(format(vtimestamp, "%H:%M"), format="%H:%M"),
-           lbl=sprintf("x%s %s - %.0f%s(%s) - %s - %.1f", visitno, str_to_title(vtype), age, sex, id, ra, vscore))
-}
-
-get_enrollment <- function(input) {
-  enroll_qry <- sprintf("
-                 select * from visit_summary
-                 natural join person
-                 natural join enroll
-                 where study like '%s'
-                 and edate >= '%s'
-                 and edate <= '%s'
-                 and etype like 'LunaID'",
-                 input$study, input$daterange[1], input$daterange[2])
-  enroll_d <- db_query(enroll_qry, con) %>%
-    mutate(enrolldate=date(edate))
-}
 
 # note file
 mtg_date <- lapply(strsplit(as.character(today()), '-'), FUN = function(x){paste(x[1], x[2], x[3], sep = '')})
@@ -135,68 +98,13 @@ ui <- dashboardPage(
 server <- function(input, output) {
  
 ## code for plots 
-  output$cal <- renderPlot({
-    d <- get_data(input)
-    
-    ggplot(d) +
-      aes(x=vdate, y=vtime, color=paste(study, vtype), label=lbl, group=id) +
-      geom_line(aes(color=NULL)) +
-      geom_label(show.legend = TRUE) +
-      theme_cowplot() +
-      theme(axis.text.x=element_text(angle=45, hjust=1),
-           legend.position="bottom") +
-      #theme_minimal() +
-      scale_x_date(expand = expand_scale(add=1), labels=date_format('%a %b %d')) +
-      labs(x = 'Visit date', y = 'Visit time', color = 'Visit type') + 
-      scale_colour_brewer(palette = 'Set1')
-    #scale_y_datetime(labels=date_format("%I:%M %p"))
-    
-  })
-  
-  output$hist <- renderPlot({
-    d <- get_data(input) %>% filter(!duplicated(id))
-    #d <- get_enrollment(input) %>% filter(!duplicated(id))
-    
-    ggplot(d) +
-      aes(x=age, fill=sex) +
-      geom_histogram(position='dodge', binwidth = 1) +
-      theme_cowplot() + facet_wrap(~study) +
-      scale_fill_brewer(palette = 'Set1') +
-      labs(x = 'Age', y = 'Count', fill = 'Sex') + 
-      xlim(9, 35)
-  })
-  
-  output$source <- renderPlot({
-    d <- get_data(input)
-    
-    ggplot(d) +
-      aes(x=source) +
-      geom_histogram(stat='count') +
-      theme_cowplot() +
-      facet_wrap(~study) +
-      scale_fill_brewer(palette = 'Set1') +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-      labs(x = 'Source', y = 'Count')
-  })
+  output$cal <- renderPlot(calendar_plot(input))
+  output$hist <- renderPlot(recruitment_hist(input))
+  output$source <- renderPlot(source_hist(input))
  
 ## code for widgets
 # get enrollment totals and print in val box
-  subject_totals <- reactive({
-    
-    if (input$study == '%') {
-      study_filter <- list('BrainMechR01', 'PET')
-    } else {
-      study_filter <- input$study
-    }
-    
-    sub_n <- get_data(input) %>% 
-    #sub_n <- get_enrollment(input) %>%
-      filter(!duplicated(id)) %>%
-      filter(study %in% study_filter) %>%
-      summarize(n = n())
-    sub_n[[1]]
-    
-  })
+  subject_totals <- reactive(get_total(input))
   
   output$subject_widget <- renderValueBox({
     valueBox(
