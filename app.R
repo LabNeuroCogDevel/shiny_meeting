@@ -39,13 +39,15 @@ get_data <- function(input) {
                  where study like '%s'
                  and vtimestamp >= '%s'
                  and vtimestamp <= '%s'
+                 and visitno >= %s
+                 and visitno <= %s
                  and etype like 'LunaID'",
-                 input$study, input$daterange[1], input$daterange[2])
+                 input$study, input$daterange[1], input$daterange[2], input$study_yr[1], input$study_yr[2])
   d <- db_query(qry, con) %>%
     mutate(vdate=date(vtimestamp),
            #vtime=hm(format(vtimestamp, "%H:%M")),
            vtime=as.POSIXct(format(vtimestamp, "%H:%M"), format="%H:%M"),
-           lbl=sprintf("%s - %.0f%s(%s) - %.1f", str_to_title(vtype), age, sex, id, vscore))
+           lbl=sprintf("x%s %s - %.0f%s(%s) - %s - %.1f", visitno, str_to_title(vtype), age, sex, id, ra, vscore))
 }
 
 get_enrollment <- function(input) {
@@ -75,10 +77,10 @@ sidebar <- dashboardSidebar(
     menuItem('Study Progress', tabName = 'study_progress', icon = icon('signal')),
     menuItem('Notes', tabName = 'notes', icon = icon('clipboard')),
 
-    dateRangeInput('daterange', label = 'Date range:', start = lastweek, end = today()),    
+    dateRangeInput('daterange', label = 'Date range:', start = lastweek, end = today()),  
+    sliderInput('study_yr', label = 'Study year:', min = 1, max = 3, value = c(1, 3)),
     selectInput('study', label = 'Study:', choices = c('All' = '%', '7T' = 'BrainMechR01', 'PET' = 'PET'), selected = 'All'),
-    selectInput('study_yr', label = 'Study year:', choices = c('All' = '%', '1' = '1', '2' = '2', '3' = '3'), selected = 'All'),
-    selectInput('status', label = 'Status:', choices = c('Completed' = 'finished', 'Scheduled' = 'scheduled'), selected = 'Completed')
+    selectInput('status', label = 'Status:', choices = c('Completed' = 'complete', 'Scheduled' = 'scheduled'), selected = 'Completed')
   ),
   collapsed = TRUE
 )
