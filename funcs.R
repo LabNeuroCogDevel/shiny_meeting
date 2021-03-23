@@ -7,6 +7,16 @@ bea_res <- function(...) normalizePath(
              'bea_res',
              ...))
 
+#
+example_input <- function() {
+   td <- lubridate::today()
+    input <- list(
+      daterange = c(td - lubridate::days(7), td),
+      study_yr  = c(1, 3),
+      study= "%",
+      status = "complete")
+}
+
 get_data <- function(input) {
   qry <- sprintf("
                  select * from visit_summary
@@ -15,11 +25,17 @@ get_data <- function(input) {
                  where study like '%s'
                  and vtimestamp >= '%s'
                  and vtimestamp <= '%s'
-                 and visitno >= %s
-                 and visitno <= %s
+                 and ((visitno >= %s and visitno <= %s) or
+                       visitno is NULL)
                  and etype like 'LunaID'",
                  input$study, input$daterange[1], input$daterange[2], input$study_yr[1], input$study_yr[2])
-  d <- db_query(qry) %>%
+  res <- db_query(qry)
+  if (nrow(res) <= 0L) {
+     print(gsub(" \\+|\\n"," ", qry))
+     cat("no results!\n")
+   }
+
+  d <- res %>%
     mutate(vdate=date(vtimestamp),
            #vtime=hm(format(vtimestamp, "%H:%M")),
            vtime=as.POSIXct(format(vtimestamp, "%H:%M"), format="%H:%M"),

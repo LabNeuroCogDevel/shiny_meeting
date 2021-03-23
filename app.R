@@ -8,30 +8,37 @@
 # install.packages('RColorBrewer')
 
 library(LNCDR)
-library(shiny)
-library(lubridate)
-library(dplyr)
-library(ggplot2)
-library(cowplot)
-library(scales)
-library(shinydashboard)
-library(RColorBrewer)
-library(stringr)
+if (! "pacman" %in% installed.packages()) install.packages("pacman")
+library(pacman)
+p_load(shiny)
+p_load(lubridate)
+p_load(dplyr)
+p_load(ggplot2)
+p_load(cowplot)
+p_load(scales)
+p_load(shinydashboard)
+p_load(RColorBrewer)
+p_load(stringr)
+p_load(glue)
 source('funcs.R')
 source('plots.R')
 
 ### not used. just hardcode the two we want
 studies <- db_query("select study from study")$study
 vtypes <- unique(db_query("select * from visit_summary")$vtype)
-lastweek <- today() - days(7)
-nextweek <- today() + days(7)
 
 
 # note file
-mtg_date <- lapply(strsplit(as.character(today()), '-'), FUN = function(x){paste(x[1], x[2], x[3], sep = '')})
-mtg_file <- paste(paste('labmeeting', mtg_date, sep = '_'), 'md', sep = '.')
-bea_res_mtg_file <- file.path(bea_res('Administrative/Lab Mtg Agenda and Minutes'), paste(paste('labmeeting', mtg_date, sep = '_'), 'md', sep = '.'))
+get_week_notes <- function(note_date=today()) {
+   # find file like
+   # /Volumes/L/bea_res/Administrative/Lab Mtg Agenda and Minutes/labmeeting_20210323.md
+   note_dir <- bea_res("Administrative/Lab Mtg Agenda and Minutes")
+   ymd_date <- format(note_date, "%Y%m%d")
 
+   mtg_file <- file.path(note_dir, glue("labmeeting_{ymd_date}.md"))
+   if (! file.exists(mtg_file)) return(glue("missing file {mtg_file}"))
+   includeMarkdown(mtg_file)
+}
 ### create dashboard interface
 ## sidebar menu
 sidebar <- dashboardSidebar(
@@ -40,7 +47,9 @@ sidebar <- dashboardSidebar(
     menuItem('Study Progress', tabName = 'study_progress', icon = icon('signal')),
     menuItem('Notes', tabName = 'notes', icon = icon('clipboard')),
 
-    dateRangeInput('daterange', label = 'Date range:', start = lastweek, end = today()),  
+    dateRangeInput("daterange", label = "Date range:",
+                   start = today() - days(7),
+                   end   = today()),
     sliderInput('study_yr', label = 'Study year:', min = 1, max = 3, value = c(1, 3)),
     selectInput('study', label = 'Study:', choices = c('All' = '%', '7T' = 'BrainMechR01', 'PET' = 'PET'), selected = 'All'),
     selectInput('status', label = 'Status:', choices = c('Completed' = 'complete', 'Scheduled' = 'scheduled'), selected = 'Completed')
@@ -77,7 +86,7 @@ body <- dashboardBody(
     
     # notes tab
     tabItem(tabName = 'notes',
-            fluidRow(includeMarkdown(bea_res_mtg_file))
+            fluidRow(get_week_notes())
     )
     
   )
@@ -92,7 +101,7 @@ ui <- dashboardPage(
 )
 
 # eg
-#input <- list(study="BrainMechR01", daterange=c(lastweek, nextweek))
+#input <- list(study="BrainMechR01", daterange=c(lastweek, today() + days(7)))
 
 ### server
 server <- function(input, output) {
@@ -191,11 +200,10 @@ server <- function(input, output) {
       icon = icon('cloud', lib = 'font-awesome'),
       color = 'teal'
     )
-  })  
-  
+  })
 }
 
-### run the application 
+### run the application
 ## if you get an error because there are too many connections open, execute following line in console first:
 # lapply(dbListConnections(drv = dbDriver("PostgreSQL")), function(x) {dbDisconnect(conn = x)})
 shinyApp(ui = ui, server = server)
