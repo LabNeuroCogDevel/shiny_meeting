@@ -3,9 +3,8 @@
 # lab meeting shiny app
 # 20191028WF - init
 # 20191029JF - add dashboard stuff
+# 20210323WF - resurrect
 
-# install.packages('shinydashboard')
-# install.packages('RColorBrewer')
 
 library(LNCDR)
 if (! "pacman" %in% installed.packages()) install.packages("pacman")
@@ -22,6 +21,10 @@ p_load(stringr)
 p_load(glue)
 source('funcs.R')
 source('plots.R')
+gcal_iframe <- function() {
+   gcalurl <- 'https://calendar.google.com/calendar/u/0/embed?src=lunalncd@gmail.com&ctz=America/New_York&mode=WEEK'
+   HTML(glue('<iframe src="{gcalurl}" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>'))
+}
 
 ### not used. just hardcode the two we want
 studies <- db_query("select study from study")$study
@@ -43,16 +46,21 @@ get_week_notes <- function(note_date=today()) {
 ## sidebar menu
 sidebar <- dashboardSidebar(
   sidebarMenu(id = 'sidebarmenu',
-    menuItem('Calendar', tabName = 'calendar', icon = icon('calendar')),
+    menuItem('Visits', tabName = 'visits', icon = icon('calendar')),
     menuItem('Study Progress', tabName = 'study_progress', icon = icon('signal')),
     menuItem('Notes', tabName = 'notes', icon = icon('clipboard')),
+    menuItem('GCal', tabName = 'gcal', icon = icon('calendar')),
 
+    # see funcs::example_input
     dateRangeInput("daterange", label = "Date range:",
                    start = today() - days(7),
                    end   = today()),
-    sliderInput('study_yr', label = 'Study year:', min = 1, max = 3, value = c(1, 3)),
-    selectInput('study', label = 'Study:', choices = c('All' = '%', '7T' = 'BrainMechR01', 'PET' = 'PET'), selected = 'All'),
-    selectInput('status', label = 'Status:', choices = c('Completed' = 'complete', 'Scheduled' = 'scheduled'), selected = 'Completed')
+    sliderInput('study_yr', label = 'Study year:', value = c(1, 3),
+                min = 1, max = 3,),
+    selectInput('study', label = 'Study:', selected = 'All',
+                choices = c('All' = '%', '7T' = 'BrainMechR01', 'PET' = 'PET')),
+    selectInput('status', label = 'Status:', selected = 'Completed',
+                choices = c('Completed' = 'complete', 'Scheduled' = 'scheduled'))
   ),
   collapsed = TRUE
 )
@@ -60,9 +68,8 @@ sidebar <- dashboardSidebar(
 ## dashboard body (one tab per sidebar menu option)
 body <- dashboardBody(
   tabItems(
-    # calendar tab
-    tabItem(tabName = 'calendar',
-            
+    # calendar visits tab
+    tabItem(tabName = 'visits',
             # widgets                     
             fluidRow(
               valueBoxOutput('subject_widget', width = 3), # participants enrolled since 'lastweek'
@@ -72,7 +79,10 @@ body <- dashboardBody(
             ),
 
             # plots
-            fluidRow(box(title = 'Calendar', width = 12, plotOutput('cal')))
+            fluidRow(box(title = 'Calendar', width = 12,
+                         plotOutput('visit_cal', click="visit_cal_click"))),
+            # plots
+            fluidRow(box(title="Info", width = 12, tableOutput('visit_info')))
             
             ),
     
@@ -84,13 +94,10 @@ body <- dashboardBody(
             fluidRow(box(title = 'Recruitment Sources', width = 12, plotOutput('source')))
     ),
     
-    # notes tab
-    tabItem(tabName = 'notes',
-            fluidRow(get_week_notes())
-    )
-    
-  )
-)
+    tabItem(tabName = 'notes', fluidRow(get_week_notes())),
+    tabItem(tabName="gcal", fluidRow(gcal_iframe()))
+))
+
 
 
 ### ui
@@ -106,101 +113,49 @@ ui <- dashboardPage(
 ### server
 server <- function(input, output) {
  
-## code for plots 
-  output$cal <- renderPlot(calendar_plot(input))
-  output$hist <- renderPlot(recruitment_hist(input))
-  output$source <- renderPlot(source_hist(input))
+  # is not updated unless input changes
+  visit_data <- reactive({get_visit_data(input)})
+     #bindCache(input$daterange, input$study, input$study_yr)
+  # TODO:  do the same for recruitment
+
+  ## plots
+  output$visit_cal  <- renderPlot(visit_plot(visit_data()))
+  #output$visit_cal  <- renderPlot(calendar_plot_label(input))
+  output$visit_info <- renderTable(notes_at_click(visit_data(), input$visit_cal_click))
+  output$hist       <- renderPlot(recruitment_hist(input))
+  output$source     <- renderPlot(source_hist(input))
  
-## code for widgets
-# get enrollment totals and print in val box
-  subject_totals <- reactive(get_total(input))
-  
+  ## widgets
+  # get enrollment totals and print in val box
   output$subject_widget <- renderValueBox({
     valueBox(
-      paste0(subject_totals()),
-      'Subjects "enrolled"',
+      paste0(get_total(visit_data(), input$study)),
+      "Subjects visited",
       icon = icon('user', lib = 'font-awesome'),
       color = 'red'
     )
   })
 
 # get behavioral totals and print in val box
-  behav_totals <- reactive({
-    
-    if (input$study == '%') {
-      study_filter <- list('BrainMechR01', 'PET')
-    } else {
-      study_filter <- input$study
-    }
-    
-    behav_n <- get_data(input) %>%
-      filter(vtype == 'Behavioral') %>%
-      filter(study %in% study_filter) %>%
-      summarize(n = n())
-    behav_n[[1]]
-    
-  })
-
   output$behav_widget <- renderValueBox({
     valueBox(
-      paste0(behav_totals()),
+      total_visit_of_type(visit_data(), "Behavioral", input$study),
       'Behaviorals completed',
       icon = icon('cogs', lib = 'font-awesome'),
-      color = 'blue'
-    )
-  }) 
- 
-# get scan totals and print in val box 
-  scan_totals <- reactive({
-    
-    if (input$study == '%') {
-      study_filter <- list('BrainMechR01', 'PET')
-    } else {
-      study_filter <- input$study
-    }
-    
-    scan_n <- get_data(input) %>%
-      filter(vtype == 'Scan') %>%
-      filter(study %in% study_filter) %>%
-      summarize(n = n())
-    scan_n[[1]]
-    
-  })
-  
+      color = 'blue')})
   output$scan_widget <- renderValueBox({
     valueBox(
-      paste0(scan_totals()),
+      total_visit_of_type(visit_data(), "Scan", input$study),
       'Scans completed',
       icon = icon('magnet', lib = 'font-awesome'),
       color = 'purple'
-    )
-  }) 
-
-# get EEG totals and print in val box 
-  eeg_totals <- reactive({
-    
-    if (input$study == '%') {
-      study_filter <- list('BrainMechR01', 'PET')
-    } else {
-      study_filter <- input$study
-    }
-    
-    eeg_n <- get_data(input) %>%
-      filter(vtype == 'eeg') %>%
-      filter(study %in% study_filter) %>%
-      summarize(n = n())
-    eeg_n[[1]]
-    
-  })
-  
+    )})
   output$eeg_widget <- renderValueBox({
     valueBox(
-      paste0(eeg_totals()),
+             {total_visit_of_type(visit_data(), "eeg", input$study)},
       'EEGs completed',
       icon = icon('cloud', lib = 'font-awesome'),
-      color = 'teal'
-    )
-  })
+      color = 'teal')})
 }
 
 ### run the application

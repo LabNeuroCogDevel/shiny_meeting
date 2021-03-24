@@ -1,24 +1,17 @@
-# source('funcs.R') # for get_data and get_notes
+# source('funcs.R') # for get_visit_data and get_notes
 #' @examples
-#' calendar_plot(example_input(first_day=today()-days(100)) 
-calendar_plot <- function(input) {
-   d <- get_data(input) %>%
-      group_by(vdate) %>%
-      mutate(visit_in_day=rank(paste(vtype,vdate), ties.method="first"),
-             color=paste(gsub('BrainMechR01','7T',study), vtype),
-             lbl_newline=gsub("-", "\n", lbl)
-      )
-
+#' calendar_plot(example_input(first_day=today()-days(100))
+visit_plot <- function(visit_data) {
    # date_breaks <- "1 day"
-   date_breaks <- as.Date(unique(d$vdate))
+   date_breaks <- as.Date(unique(visit_data$vdate))
    if (length(date_breaks) > 10) {
       date_breaks <- waiver()
    }
 
-   ggplot(d) +
-      aes(x=vdate, y=paste(vtype, visit_in_day),
+   ggplot(visit_data) +
+      aes(x=vdate, y=vtype_visit_in_day,
           fill=color, label=lbl_newline, group=id) +
-      geom_tile(width=.8) +
+      geom_tile(width=0.5) +
       geom_line() +
       geom_label() +
       theme_cowplot() +
@@ -33,7 +26,7 @@ calendar_plot <- function(input) {
       #scale_y_datetime(labels=date_format("%I:%M %p"))
 }
 calendar_plot_label <- function(input) {
-   d <- get_data(input) %>% mutate(color=paste(gsub('BrainMechR01','7T',study), vtype))
+   d <- get_visit_data(input) %>% mutate(color=paste(gsub('BrainMechR01','7T',study), vtype))
    ggplot(d) +
       aes(x=vdate, y=vtime, color=color, label=lbl, group=id) +
       geom_line(aes(color=NULL)) +
@@ -47,27 +40,39 @@ calendar_plot_label <- function(input) {
       scale_colour_brewer(palette = 'Set1')
       #scale_y_datetime(labels=date_format("%I:%M %p"))
 }
+
 recruitment_hist <- function(input) {
-    d <- get_data(input) %>% filter(!duplicated(id))
-    #d <- get_enrollment(input) %>% filter(!duplicated(id))
-    
-    ggplot(d) +
+    #d <- get_visit_data(input) %>% filter(!duplicated(id))
+    d <- get_enrollment(input) %>% filter(!duplicated(id))
+
+    rplot <- ggplot(d) +
       aes(x=age, fill=sex) +
       geom_histogram(position='dodge', binwidth = 1) +
-      theme_cowplot() + facet_wrap(~study) +
-      scale_fill_brewer(palette = 'Set1') +
+      theme_cowplot() +
       labs(x = 'Age', y = 'Count', fill = 'Sex') + 
       xlim(9, 35)
+
+   if (nrow(d) > 0L)
+      rplot <- rplot + facet_wrap(~study) +
+         scale_fill_brewer(palette = 'Set1')
+
+   return(rplot)
 }
 
 source_hist <- function(input){
-    d <- get_data(input)
-    ggplot(d) +
+   #d <- get_visit_data(input)
+   d <- get_enrollment(input)
+   shist <-  ggplot(d) +
       aes(x=source) +
       geom_histogram(stat='count') +
       theme_cowplot() +
-      facet_wrap(~study) +
-      scale_fill_brewer(palette = 'Set1') +
       theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
       labs(x = 'Source', y = 'Count')
+
+   if (nrow(d) > 0L)
+      shist <- shist +
+      facet_wrap(~study) +
+      scale_fill_brewer(palette = 'Set1')
+
+   return(shist)
 }
