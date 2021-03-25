@@ -1,4 +1,15 @@
 #!/usr/bin/env Rscript
-scriptdir <- gsub('--file=','', grep(pattern='--file=', value=T, commandArgs(trailingOnly = FALSE))[1])
-shiny::runApp(normalizePath(dirname(scriptdir)), host='0.0.0.0', port=9876)
 
+# where are we running this from
+scriptdir <-
+   gsub('--file=','',
+        grep(pattern='--file=', value=T,
+             commandArgs(trailingOnly = FALSE))[1])
+scriptdir <- normalizePath(dirname(scriptdir))
+
+# grab shiny with pacman
+if (! "pacman" %in% installed.packages())
+  install.packages("pacman")
+pacman::p_load(shiny)
+
+runApp(scriptdir, host='0.0.0.0', port=9876)

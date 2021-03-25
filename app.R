@@ -6,8 +6,11 @@
 # 20210323WF - resurrect
 
 
+
+if (! "LNCDR" %in% installed.packages()) 
+   remotes::install_github('LabNeuroCogDevel/LNCDR')
 library(LNCDR)
-if (! "pacman" %in% installed.packages()) install.packages("pacman")
+# we are sure to have pacman if coming from './run'
 library(pacman)
 p_load(shiny)
 p_load(lubridate)
@@ -21,6 +24,8 @@ p_load(stringr)
 p_load(glue)
 source('funcs.R')
 source('plots.R')
+
+# how to show the google calendar
 gcal_iframe <- function() {
    gcalurl <- 'https://calendar.google.com/calendar/u/0/embed?src=lunalncd@gmail.com&ctz=America/New_York&mode=WEEK'
    HTML(glue('<iframe src="{gcalurl}" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>'))
