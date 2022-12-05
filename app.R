@@ -17,6 +17,7 @@ library(scales)
 library(shinydashboard)
 library(RColorBrewer)
 library(stringr)
+library(DT)
 source('funcs.R')
 source('plots.R')
 
@@ -63,7 +64,8 @@ body <- dashboardBody(
             ),
 
             # plots
-            fluidRow(box(title = 'Calendar', width = 12, plotOutput('cal')))
+            fluidRow(box(title = 'Calendar', width = 12, plotOutput('cal', click="cal_click"))),
+            fluidRow(dataTableOutput('subj_notes'))
             
             ),
     
@@ -192,6 +194,9 @@ server <- function(input, output) {
       color = 'teal'
     )
   })  
+
+  # interactive plot: click on calendar -> bring up notes
+  output$subj_notes <- renderDataTable({get_notes_at(input)})
   
 }
 

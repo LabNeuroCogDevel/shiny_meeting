@@ -1,14 +1,16 @@
 # source('funcs.R') # for get_data and get_notes
 calendar_plot <- function(input) {
-   d <- get_data(input) %>% mutate(color=paste(gsub('BrainMechR01','7T',study), vtype))
+   d <- get_data(input) %>%
+      mutate(color=paste(gsub('BrainMechR01','7T',study), vtype))
+
    ggplot(d) +
-      aes(x=vdate, y=vtime, color=color, label=lbl, group=id) +
+      aes(x=vdate, y=time_rank, fill=color, label=lbl, group=id) +
+      geom_tile() +
       geom_line(aes(color=NULL)) +
       geom_label() +
       theme_cowplot() +
       theme(axis.text.x=element_text(angle=45, hjust=1),
             legend.position="bottom") +
-      #theme_minimal() +
       scale_x_date(expand = expand_scale(add=1), labels=date_format('%a %b %d')) +
       labs(x = 'Visit date', y = 'Visit time', color = 'Visit type') + 
       scale_colour_brewer(palette = 'Set1')

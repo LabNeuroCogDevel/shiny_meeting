@@ -3,8 +3,8 @@
 # windows L: is /Volumes/L elsewhere
 bea_res <- function(...) normalizePath(
             file.path(
-             ifelse(.Platform$OS.type == "windows", 'L:','/Volumes/L'),
-             'bea_res',
+             ifelse(.Platform$OS.type == "windows", 'L:','/Volumes/L/bea_res'),
+             # 'bea_res', # 20191112 - bea_res no longer part of path, 20191216: put bea_res back
              ...))
 
 get_data <- function(input) {
@@ -19,11 +19,14 @@ get_data <- function(input) {
                  and visitno <= %s
                  and etype like 'LunaID'",
                  input$study, input$daterange[1], input$daterange[2], input$study_yr[1], input$study_yr[2])
+  #cat(qry,"\n")
   d <- db_query(qry) %>%
     mutate(vdate=date(vtimestamp),
            #vtime=hm(format(vtimestamp, "%H:%M")),
            vtime=as.POSIXct(format(vtimestamp, "%H:%M"), format="%H:%M"),
-           lbl=sprintf("x%s %s - %.0f%s(%s) - %s - %.1f", visitno, str_to_title(vtype), age, sex, id, ra, vscore))
+           lbl=sprintf("x%s %s\n%.0f%s(%s)\n%s - %.1f", visitno, str_to_title(vtype), age, sex, id, ra, vscore)) %>%
+   # add time_rank for easy grid plotting
+   group_by(vdate) %>% mutate(time_rank=rank(vtimestamp)) %>% ungroup()
 }
 
 get_enrollment <- function(input) {
@@ -71,3 +74,16 @@ qry <- sprintf("
     left join visit_notes vn on vs.vid=vn.vd")
 }
 
+get_notes_at <- function(input) {
+   click_pos <- input$cal_click
+   d <- get_data(input)
+   d_pnt <- nearPoints(d, click_pos, xvar="vdate", yvar="vtime")
+   qry <- sprintf("select * from note
+                  natural join enroll
+                  where pid in (%s) and
+                  etype like 'LunaID'
+                  order by ndate", paste(collapse=',', d_pnt$pid))
+
+   print(qry)
+   db_query(qry)
+}
