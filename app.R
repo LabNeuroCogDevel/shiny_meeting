@@ -88,7 +88,7 @@ body <- dashboardBody(
             fluidRow(box(title = 'Calendar', width = 12,
                          plotOutput('visit_cal', click="visit_cal_click"))),
             fluidRow(box(title="Visit Notes", width = 12, tableOutput('visit_info'))),
-            fluidRow(box(title="Subj Notes", dataTableOutput('subj_notes')))
+            fluidRow(box(title="Subj Notes", width = 12, dataTableOutput('subj_notes')))
             ),
     
     # study progress tab
@@ -166,6 +166,7 @@ server <- function(input, output) {
 
   # interactive plot: click on calendar -> bring up notes
   output$subj_notes <- renderDataTable({get_notes_at(input)})
+  # output$visit_info <- renderTable(notes_at_click(visit_data(), input$visit_cal_click))
 }
 
 ### run the application

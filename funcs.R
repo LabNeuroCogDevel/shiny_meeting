@@ -109,16 +109,38 @@ qry <- sprintf("
 }
 
 get_notes_at <- function(input) {
-   click_pos <- input$cal_click
+   click_pos <- input$visit_cal_click
    d <- get_visit_data(input)
-   #with(d, LNCDR::qassertm(pid='i',vdate='s',vtime='s'))
-   d_pnt <- nearPoints(d, click_pos, xvar="vdate", yvar="vtime")
-   #if(is.null(d_pnt$pid)) { warning("no pid in clicked", d_pnt); return()}
-   qry <- sprintf("select * from note
+   #     pid   vid vtimestamp          vtype vscore visitno googleuri       age study
+   #  <int> <int> <dttm>              <chr>  <dbl>   <int> <chr>         <dbl> <chr>
+   #1  1673  5700 2022-11-28 15:30:00 eeg        4       3 1eo0673e34fi…  14.7 Brai…
+   # … with 27 more variables: cohort <chr>, action <chr>, ra <chr>, dur_hr <dbl>,
+   #   notes <chr>, dvisit <chr>, dperson <chr>, fname <chr>, lname <chr>,
+   #   dob <date>, sex <chr>, hand <chr>, nick <chr>, adddate <date>,
+   #   source <chr>, eid <int>, etype <chr>, id <chr>, edate <date>, vdate <date>,
+   #   enrolldate <date>, vtime <dttm>, lbl <chr>, visit_in_day <int>,
+   #   color <chr>, lbl_newline <chr>, vtype_visit_in_day <fct>
+
+   #with(d, LNCDR::qassertm(pid='i',vdate='+',vtime='s'))
+   cat("visits:")
+   print(d)
+   cat("click_pos:\n")
+   print(click_pos[c("x","y")])
+   d_pnt <- nearPoints(d, click_pos, threshold=100)#, xvar="vdate", yvar="vtime")
+   cat("have close ids:")
+   #  $x
+   # [1] 19318.98
+   # 
+   # $y
+   # [1] 0.9985919
+
+   print(d_pnt)
+   pids <- paste(collapse=',', d_pnt$pid)
+   qry <- glue("select * from note
                   natural join enroll
-                  where pid in (%s) and
+                  where pid in ({pids}) and
                   etype like 'LunaID'
-                  order by ndate", paste(collapse=',', d_pnt$pid))
+                  order by ndate")
 
    print(qry)
    db_query(qry)
